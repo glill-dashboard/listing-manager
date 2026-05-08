@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Guide Gail — Listing Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Homemade+Apple&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --green: #4b8b3b; --green-light: #eaf3de; --font-head: 'Homemade Apple', cursive; --font-body: 'Jost', sans-serif; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-body); background: #f7f6f3; color: #222; min-height: 100vh; }
+
+  .header { background: #fff; border-bottom: 1px solid #e8e4de; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .header-title { font-family: var(--font-head); font-size: 1.7rem; color: var(--green); font-weight: 400; line-height: 1; }
+  .header-sub { font-size: 11px; color: #999; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 3px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .sync-status { font-size: 11px; color: #aaa; display: flex; align-items: center; gap: 6px; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; flex-shrink: 0; transition: background 0.4s; }
+  .sync-dot.saved { background: var(--green); }
+  .sync-dot.saving { background: #f0a500; }
+  .sync-dot.error { background: #c0392b; }
+  .edit-toggle { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 6px 16px; border-radius: 20px; border: 1.5px solid #ddd; background: #fafaf8; color: #888; cursor: pointer; transition: all 0.15s; }
+  .edit-toggle:hover { border-color: var(--green); color: var(--green); }
+  .edit-toggle.active { background: #fff8e6; border-color: #e0a800; color: #b07800; }
+
+  .edit-banner { background: #fff8e6; border-bottom: 1px solid #f0d080; padding: 8px 24px; font-size: 12px; color: #9a6800; display: none; align-items: center; gap: 8px; line-height: 1.5; }
+  .edit-banner.show { display: flex; }
+
+  .tabs-bar { background: #fff; border-bottom: 1px solid #e8e4de; padding: 0 24px; display: flex; align-items: center; overflow-x: auto; }
+  .ltab-wrap { display: flex; align-items: center; border-bottom: 2.5px solid transparent; transition: border-color 0.15s; }
+  .ltab-wrap.active { border-bottom-color: var(--green); }
+  .ltab { display: flex; align-items: center; gap: 7px; padding: 14px 4px 14px 18px; font-size: 13px; font-weight: 500; font-family: var(--font-body); color: #999; border: none; background: none; cursor: pointer; white-space: nowrap; transition: color 0.15s; }
+  .ltab-wrap.active .ltab { color: var(--green); }
+  .ltab:hover { color: var(--green); }
+  .ltab-del { width: 18px; height: 18px; border-radius: 50%; background: transparent; border: none; font-size: 11px; color: #ccc; cursor: pointer; display: none; align-items: center; justify-content: center; font-family: var(--font-body); margin-right: 10px; transition: all 0.15s; line-height: 1; padding: 0; }
+  .ltab-del:hover { background: #fde8e8; color: #c0392b; }
+  .edit-mode .ltab-del { display: flex; }
+  .ltab-add { padding: 14px 16px; font-size: 12px; color: #bbb; border: none; background: none; cursor: pointer; font-family: var(--font-body); white-space: nowrap; flex-shrink: 0; }
+  .ltab-add:hover { color: var(--green); }
+
+  .progress-wrap { padding: 14px 24px 0; display: flex; align-items: center; gap: 12px; }
+  .prog-bar { flex: 1; height: 4px; background: #e8e4de; border-radius: 4px; overflow: hidden; }
+  .prog-fill { height: 100%; background: var(--green); border-radius: 4px; transition: width 0.5s ease; }
+  .prog-label { font-size: 12px; color: #aaa; white-space: nowrap; }
+
+  .board-scroll { overflow-x: auto; padding: 18px 24px 32px; }
+  .board { display: flex; gap: 12px; align-items: flex-start; min-width: max-content; }
+  .col { width: 165px; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  .col-head { padding: 13px 12px 10px; }
+  .col-head-name { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.95); }
+  .col-head-count { font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+  .col-body { padding: 8px 7px 10px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+
+  /* CARD STATES */
+  .gcard { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.24); border-radius: 9px; padding: 10px 10px 9px; cursor: pointer; transition: background 0.15s, transform 0.12s; position: relative; }
+  .gcard:hover { background: rgba(255,255,255,0.27); transform: translateY(-2px); }
+  .gcard.all-done { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.10); opacity: 0.6; }
+  .gcard.has-pending { border-color: rgba(255,255,255,0.55); }
+  .gcard-bar-wrap { height: 2px; background: rgba(255,255,255,0.18); border-radius: 2px; margin-bottom: 7px; overflow: hidden; }
+  .gcard-bar-fill { height: 100%; background: rgba(255,255,255,0.8); border-radius: 2px; transition: width 0.4s; }
+  .gcard-name { font-size: 11.5px; font-weight: 500; color: rgba(255,255,255,0.95); line-height: 1.35; margin-bottom: 3px; }
+  .gcard.all-done .gcard-name { color: rgba(255,255,255,0.4); }
+  .gcard-meta { font-size: 10px; color: rgba(255,255,255,0.55); display: flex; align-items: center; gap: 5px; }
+  /* Pending badge on card */
+  .gcard-badge { font-size: 9px; font-weight: 600; background: rgba(255,255,255,0.9); border-radius: 8px; padding: 1px 6px; letter-spacing: 0.03em; }
+
+  .modules-bar { padding: 14px 24px 24px; }
+  .modules-inner { background: #fff; border: 1px dashed #d8d4ce; border-radius: 12px; padding: 12px 16px; }
+  .mod-label { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #aaa; margin-bottom: 9px; }
+  .mod-pills { display: flex; flex-wrap: wrap; gap: 7px; }
+  .mpill { font-size: 12px; font-family: var(--font-body); padding: 5px 14px; border-radius: 22px; border: 1px solid #ddd; background: #fafaf8; color: #888; cursor: pointer; transition: all 0.15s; }
+  .mpill:hover { border-color: var(--green); color: var(--green); }
+  .mpill.on { background: var(--green-light); border-color: var(--green); color: #2e6b26; font-weight: 500; }
+
+  /* DRAWER */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.40); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+  .overlay.open { display: flex; }
+  .drawer { width: 100%; max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.22); }
+  .drawer-head { padding: 20px 22px 15px; flex-shrink: 0; position: relative; }
+  .drawer-close { position: absolute; right: 16px; top: 16px; background: rgba(255,255,255,0.22); border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 14px; cursor: pointer; color: #fff; font-family: var(--font-body); line-height: 30px; text-align: center; transition: background 0.15s; }
+  .drawer-close:hover { background: rgba(255,255,255,0.36); }
+  .drawer-phase { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: rgba(255,255,255,0.65); margin-bottom: 4px; }
+  .drawer-group { font-size: 19px; font-weight: 500; color: #fff; padding-right: 40px; }
+  .drawer-tint { padding: 10px 22px 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; }
+  .drawer-prog { font-size: 12px; font-weight: 500; }
+  .drawer-add-btn { font-size: 11px; font-family: var(--font-body); font-weight: 500; padding: 4px 13px; border-radius: 16px; border: 1.5px dashed; background: transparent; cursor: pointer; transition: all 0.15s; display: none; }
+  .drawer-tasks { background: #fff; overflow-y: auto; flex: 1; padding: 6px 22px 28px; }
+
+  /* TASKS */
+  .task-row { display: flex; align-items: flex-start; gap: 11px; padding: 10px 0; border-bottom: 1px solid #f0ece6; }
+  .task-row:last-child { border-bottom: none; }
+  .task-row.is-na { opacity: 0.4; }
+  .tcheck { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #d0ccc6; flex-shrink: 0; margin-top: 2px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .tcheck.on::after { content: ''; display: block; width: 9px; height: 5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg) translate(1px,-1px); }
+  .task-content { flex: 1; min-width: 0; }
+  .tlabel { font-size: 13.5px; color: #222; line-height: 1.5; }
+  .tlabel.done { color: #bbb; text-decoration: line-through; }
+  .tlabel.na-label { color: #bbb; text-decoration: line-through; font-style: italic; }
+  .tnote { font-size: 11.5px; color: #888; background: #f7f6f3; border-radius: 6px; padding: 6px 10px; margin-top: 5px; border-left: 2px solid; line-height: 1.5; }
+  .tlink { font-size: 11.5px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 3px; margin-top: 5px; }
+  .tlink:hover { text-decoration: underline; }
+  /* N/A button */
+  .tna-btn { font-size: 10px; font-family: var(--font-body); padding: 2px 8px; border-radius: 10px; border: 1px solid #e0dbd4; background: #f7f6f3; color: #bbb; cursor: pointer; flex-shrink: 0; margin-top: 3px; transition: all 0.15s; white-space: nowrap; }
+  .tna-btn:hover { border-color: #aaa; color: #888; }
+  .tna-btn.na-active { background: #f0ece6; border-color: #c8c0b8; color: #888; }
+  .task-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; padding-top: 2px; }
+  .task-edit-btns { display: none; flex-direction: column; gap: 4px; }
+  .edit-mode .task-edit-btns { display: flex; }
+  .tebtn { width: 26px; height: 26px; border-radius: 6px; border: 1px solid #e8e4de; background: #fafaf8; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #aaa; transition: all 0.15s; }
+  .tebtn:hover { background: #f0ece6; color: #555; }
+  .tebtn.del:hover { background: #fde8e8; color: #c0392b; border-color: #f5b8b8; }
+
+  /* INLINE EDIT */
+  .inline-edit { background: #f7f6f3; border-radius: 10px; padding: 12px; margin: 6px 0 2px; border: 1px solid #e0dbd4; }
+  .ie-label { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #aaa; margin-bottom: 5px; }
+  .ie-input { width: 100%; padding: 7px 10px; border: 1.5px solid #e0dbd4; border-radius: 7px; font-size: 13px; font-family: var(--font-body); color: #222; background: #fff; outline: none; margin-bottom: 8px; transition: border-color 0.15s; }
+  .ie-input:focus { border-color: var(--green); }
+  .ie-btns { display: flex; gap: 7px; }
+  .ie-btn { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 6px 16px; border-radius: 16px; border: none; cursor: pointer; transition: all 0.15s; }
+  .ie-save { background: var(--green); color: #fff; }
+  .ie-save:hover { background: #3d7530; }
+  .ie-cancel { background: #f0ece6; color: #888; }
+  .ie-cancel:hover { background: #e8e4de; }
+
+  /* MODALS */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 18px; width: 100%; max-width: 460px; padding: 28px; box-shadow: 0 8px 40px rgba(0,0,0,0.16); }
+  .modal-title { font-family: var(--font-head); font-size: 1.4rem; color: var(--green); margin-bottom: 6px; font-weight: 400; }
+  .modal-sub { font-size: 13px; color: #aaa; margin-bottom: 22px; line-height: 1.55; }
+  .field-label { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #888; margin-bottom: 6px; }
+  .field-input { width: 100%; padding: 10px 14px; border: 1.5px solid #e0dbd4; border-radius: 9px; font-size: 14px; font-family: var(--font-body); color: #222; background: #fafaf8; outline: none; transition: border-color 0.15s; margin-bottom: 18px; }
+  .field-input:focus { border-color: var(--green); }
+  .modal-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; margin-bottom: 22px; }
+  .modal-pill { font-size: 12px; font-family: var(--font-body); padding: 5px 14px; border-radius: 22px; border: 1px solid #ddd; background: #fafaf8; color: #888; cursor: pointer; transition: all 0.15s; }
+  .modal-pill:hover { border-color: var(--green); color: var(--green); }
+  .modal-pill.on { background: var(--green-light); border-color: var(--green); color: #2e6b26; font-weight: 500; }
+  .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn { font-size: 13px; font-family: var(--font-body); font-weight: 500; padding: 10px 22px; border-radius: 22px; cursor: pointer; transition: all 0.15s; border: none; }
+  .btn-cancel { background: #f0ece6; color: #888; }
+  .btn-cancel:hover { background: #e8e4de; }
+  .btn-create { background: var(--green); color: #fff; }
+  .btn-create:hover { background: #3d7530; }
+  .btn-danger { background: #fde8e8; color: #c0392b; }
+  .btn-danger:hover { background: #f5b8b8; }
+
+  /* DASHBOARD */
+  .dashboard { padding: 0 24px 40px; }
+  .dashboard-title { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #bbb; margin-bottom: 16px; }
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  .dash-card { border-radius: 16px; padding: 22px 20px 20px; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+  .dash-card:hover { transform: translateY(-3px); box-shadow: 0 8px 28px rgba(0,0,0,0.13); }
+  .dash-card-icon { font-size: 1.6rem; margin-bottom: 10px; display: block; }
+  .dash-card-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .dash-card-sub { font-size: 11.5px; opacity: 0.72; line-height: 1.4; }
+
+  /* PANEL */
+  .panel-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.42); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+  .panel-overlay.open { display: flex; }
+  .panel { width: 100%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,0.22); background: #fff; }
+  .panel-head { padding: 20px 24px 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0ece6; }
+  .panel-head-left { display: flex; align-items: center; gap: 12px; }
+  .panel-icon { font-size: 1.4rem; }
+  .panel-title { font-size: 17px; font-weight: 600; color: #222; }
+  .panel-sub { font-size: 12px; color: #aaa; margin-top: 1px; }
+  .panel-close { background: #f0ece6; border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 14px; cursor: pointer; color: #888; font-family: var(--font-body); line-height: 30px; text-align: center; flex-shrink: 0; }
+  .panel-close:hover { background: #e8e4de; color: #333; }
+  .panel-body { overflow-y: auto; flex: 1; padding: 20px 24px 28px; }
+
+  /* ACTIVITY LOG */
+  .act-add-btn { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 7px 18px; border-radius: 20px; border: none; background: var(--green); color: #fff; cursor: pointer; margin-bottom: 20px; }
+  .act-add-btn:hover { background: #3d7530; }
+  .naf { background: #f7f6f3; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid #e0dbd4; display: none; }
+  .naf.open { display: block; }
+  .naf-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 12px; }
+  .naf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .naf-input { padding: 8px 10px; border: 1.5px solid #e0dbd4; border-radius: 8px; font-size: 13px; font-family: var(--font-body); color: #222; background: #fff; outline: none; width: 100%; }
+  .naf-input:focus { border-color: var(--green); }
+  .naf-btns { display: flex; gap: 8px; }
+  .naf-btn { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 7px 18px; border-radius: 16px; border: none; cursor: pointer; }
+  .naf-save { background: var(--green); color: #fff; }
+  .naf-cancel { background: #f0ece6; color: #888; }
+  .agent-card { background: #fafaf8; border: 1px solid #e8e4de; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .agent-head { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .agent-head:hover { background: #f5f3f0; }
+  .agent-name { font-size: 14px; font-weight: 500; color: #222; }
+  .agent-brokerage { font-size: 12px; color: #888; margin-top: 1px; }
+  .agent-chevron { font-size: 11px; color: #ccc; transition: transform 0.2s; }
+  .agent-card.aopen .agent-chevron { transform: rotate(180deg); }
+  .agent-body { display: none; padding: 4px 16px 14px; border-top: 1px solid #f0ece6; }
+  .agent-card.aopen .agent-body { display: block; }
+  .agent-contact { display: flex; gap: 18px; padding: 8px 0 10px; flex-wrap: wrap; }
+  .agent-ci { font-size: 12px; color: #555; }
+  .agent-ci b { color: #aaa; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 1px; }
+  .log-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #aaa; margin: 6px 0 8px; }
+  .log-entry { background: #fff; border: 1px solid #e8e4de; border-radius: 8px; padding: 9px 12px; margin-bottom: 6px; }
+  .log-date { font-size: 11px; color: #aaa; margin-bottom: 2px; }
+  .log-note { font-size: 13px; color: #333; line-height: 1.5; }
+  .log-add { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
+  .log-input { flex: 1; min-width: 100px; padding: 7px 10px; border: 1.5px solid #e0dbd4; border-radius: 8px; font-size: 12px; font-family: var(--font-body); color: #222; background: #fff; outline: none; }
+  .log-input:focus { border-color: var(--green); }
+  .log-submit { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 7px 14px; border-radius: 8px; border: none; background: var(--green); color: #fff; cursor: pointer; white-space: nowrap; }
+  .agent-del { font-size: 11px; color: #ddd; cursor: pointer; background: none; border: 1px solid #f5c0c0; padding: 3px 10px; border-radius: 10px; margin-top: 10px; font-family: var(--font-body); }
+  .agent-del:hover { color: #c0392b; background: #fde8e8; }
+
+  /* COMPS */
+  .comp-add-btn { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 7px 18px; border-radius: 20px; border: none; background: var(--green); color: #fff; cursor: pointer; margin-bottom: 20px; }
+  .comp-add-btn:hover { background: #3d7530; }
+  .comp-form { background: #f7f6f3; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid #e0dbd4; display: none; }
+  .comp-form.open { display: block; }
+  .comp-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .comp-field { padding: 7px 10px; border: 1.5px solid #e0dbd4; border-radius: 8px; font-size: 12px; font-family: var(--font-body); color: #222; background: #fff; outline: none; width: 100%; }
+  .comp-field:focus { border-color: var(--green); }
+  .comp-field.full { grid-column: 1 / -1; }
+  .comp-form-btns { display: flex; gap: 8px; }
+  .comp-submit { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 7px 18px; border-radius: 16px; border: none; background: var(--green); color: #fff; cursor: pointer; }
+  .comp-cancel { font-size: 12px; font-family: var(--font-body); font-weight: 500; padding: 7px 18px; border-radius: 16px; border: none; background: #f0ece6; color: #888; cursor: pointer; }
+  .comps-list { display: flex; flex-direction: column; gap: 10px; }
+  .comp-card { background: #fafaf8; border: 1px solid #e8e4de; border-radius: 12px; padding: 14px 16px; }
+  .comp-address { font-size: 14px; font-weight: 500; color: #222; margin-bottom: 8px; }
+  .comp-row { display: flex; flex-wrap: wrap; gap: 16px; }
+  .comp-item { font-size: 12px; color: #555; }
+  .comp-item b { color: #aaa; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 1px; }
+  .comp-notes-text { font-size: 12px; color: #888; margin-top: 8px; font-style: italic; border-top: 1px solid #f0ece6; padding-top: 8px; }
+  .comp-del { font-size: 11px; color: #ddd; cursor: pointer; background: none; border: 1px solid #f5c0c0; padding: 3px 10px; border-radius: 10px; margin-top: 10px; font-family: var(--font-body); }
+  .comp-del:hover { color: #c0392b; background: #fde8e8; }
+
+  /* NOTES / BLANK DOCS */
+  .notes-sections { display: flex; flex-direction: column; gap: 14px; }
+  .notes-section { background: #fafaf8; border: 1px solid #e8e4de; border-radius: 12px; overflow: hidden; }
+  .notes-sec-head { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .notes-sec-name { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+  .notes-save-ind { font-size: 10px; color: #bbb; font-style: italic; }
+  .notes-ta { width: 100%; border: none; background: #fff; padding: 12px 16px; font-size: 13.5px; font-family: var(--font-body); color: #222; line-height: 1.7; resize: vertical; min-height: 90px; outline: none; border-top: 1px solid #f0ece6; }
+  .notes-ta::placeholder { color: #ccc; }
+  .blank-ta { width: 100%; border: 1px solid #e8e4de; background: #fff; padding: 16px; font-size: 13.5px; font-family: var(--font-body); color: #222; line-height: 1.7; resize: vertical; min-height: 360px; outline: none; border-radius: 12px; }
+  .blank-ta::placeholder { color: #ccc; }
+  .blank-ta:focus { border-color: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">Your Guide Gail</div>
+    <div class="header-sub">listing manager</div>
+  </div>
+  <div class="header-right">
+    <div class="sync-status">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncLabel">ready</span>
+    </div>
+    <button class="edit-toggle" id="editToggle" onclick="toggleEditMode()">✏ Edit</button>
+  </div>
+</div>
+
+<div class="edit-banner" id="editBanner">
+  ✏ Edit mode — click ✎ on any task to rename it or update its template link. Use N/A to mark situational tasks. Click "Done" when finished.
+</div>
+
+<div class="tabs-bar" id="tabsBar"></div>
+
+<div class="progress-wrap">
+  <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+  <div class="prog-label" id="progLabel"></div>
+</div>
+
+<div class="board-scroll">
+  <div class="board" id="board"></div>
+</div>
+
+
+<!-- DASHBOARD CARDS -->
+<div class="dashboard" id="dashboard">
+  <div class="dashboard-title">Listing workspace</div>
+  <div class="dash-grid" id="dashGrid"></div>
+</div>
+
+<!-- PANELS -->
+<div class="panel-overlay" id="panelOverlay">
+  <div class="panel" id="panel">
+    <div class="panel-head" id="panelHead">
+      <div class="panel-head-left">
+        <div class="panel-icon" id="panelIcon"></div>
+        <div>
+          <div class="panel-title" id="panelTitle"></div>
+          <div class="panel-sub" id="panelSub"></div>
+        </div>
+      </div>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panelBody"></div>
+  </div>
+</div>
+
+<div class="modules-bar">
+  <div class="modules-inner">
+    <div class="mod-label">Add-on modules for this listing</div>
+    <div class="mod-pills" id="modPills"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="drawer" id="drawer">
+    <div class="drawer-head" id="drawerHead">
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+      <div class="drawer-phase" id="dPhase"></div>
+      <div class="drawer-group" id="dGroup"></div>
+    </div>
+    <div class="drawer-tint" id="drawerTint">
+      <div class="drawer-prog" id="dProg"></div>
+      <button class="drawer-add-btn" id="drawerAddBtn">+ Add task</button>
+    </div>
+    <div class="drawer-tasks" id="dTasks"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalNew">
+  <div class="modal">
+    <div class="modal-title">New listing</div>
+    <div class="modal-sub">Set up a fresh checklist for a new property.</div>
+    <div class="field-label">Property address</div>
+    <input class="field-input" id="newAddress" placeholder="e.g. 123 Oak Street" />
+    <div class="field-label">Seller name</div>
+    <input class="field-input" id="newSeller" placeholder="e.g. Johnson family" />
+    <div class="field-label">Property type — select all that apply</div>
+    <div class="modal-pills" id="modalPills"></div>
+    <div class="modal-btns">
+      <button class="btn btn-cancel" onclick="document.getElementById('modalNew').classList.remove('open')">Cancel</button>
+      <button class="btn btn-create" onclick="createListing()">Create listing</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalConfirm">
+  <div class="modal">
+    <div class="modal-title">Remove this listing?</div>
+    <div class="modal-sub" id="confirmText"></div>
+    <div class="modal-btns">
+      <button class="btn btn-cancel" onclick="document.getElementById('modalConfirm').classList.remove('open')">Keep it</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Yes, remove</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN1jMKkbuOsE1i7fDsu15WRJKHgzerBRC7kQZ8bkaNJNItN6PFrHXqWozqrlAcJrYX7w/exec';
+
+// ─── PHASE DATA ───────────────────────────────────────────────────────────────
+// Column order: Kickoff, Listing Prep, Complete TDS/SPQ, Disclosures, Marketing,
+//               Pre-MLS, Open House, Live on MLS, In Contract, Post-COE
+
+const BASE_PHASES = [
+  {name:'Kickoff', col:'#5c3d8f', tint:'#f0ebfc', groups:[
+    {name:'Admin setup', tasks:[
+      {t:'Add contact to newsletter'},
+      {t:'Look up ownership on tax records'},
+      {t:'Order prelim title report'},
+      {t:'Enter into Transaction History spreadsheet'},
+      {t:'Initiate Listing Wizard'},
+    ]},
+    {name:'Client comms', tasks:[
+      {t:'Send RLA contract to sellers', link:'https://docs.google.com/document/d/1az0kAd3b9TCaqpxRxvPwmKXoVQubmbwGGzaRGflNCOI/edit?tab=t.0'},
+      {t:'Send TC signed RLA'},
+      {t:'Send Thank You for Choosing Me email', link:'https://docs.google.com/document/d/1zXX9NguWv90Uyv6kGgQzVJepM9vdi5lGbDbwkLwn8ws/edit?tab=t.0'},
+      {t:'Establish weekly check-in call cadence'},
+      {t:'Share specialized calendar with sellers'},
+      {t:'Share Process Chart — what to expect'},
+    ]},
+    {name:'Property review', tasks:[
+      {t:'Property walk-through: punch list', note:'Focus on deferred maintenance and anything that could hurt buyer perception.'},
+      {t:'Create Property Notes doc', note:'File in Listing Prep folder.'},
+      {t:'Start tracking comps in neighborhood'},
+      {t:'Create List Price notes doc (amenities + comps)'},
+    ]},
+  ]},
+  {name:'Listing Prep', col:'#8a4f1a', tint:'#faf0e2', groups:[
+    {name:'Seller conversation', tasks:[
+      {t:'Discuss repairs, decluttering, deep clean, landscaping', note:'Remind sellers: vendors expect timely payment — some require a deposit, most due when job is finished.'},
+      {t:'Get keys from clients (garage, mailbox, doors, sheds)'},
+      {t:'Create budget — Zoom with client to present', link:'https://docs.google.com/spreadsheets/d/1pA3eRSZ_cMogohAdWzJFHU8PcwrlVQS_a9v8JKrtMe4/edit?gid=0#gid=0'},
+      {t:'Create Transaction Calendar invite with client'},
+      {t:'Install combo lockbox for vendors'},
+    ]},
+    {name:'Schedule inspections', tasks:[
+      {t:'Schedule home inspection'},
+      {t:'Schedule roof inspection'},
+      {t:'Schedule pest inspection'},
+      {t:'Install smoke detectors/CO + strap water heater', note:'Required before inspections and appraiser appointment.'},
+    ]},
+    {name:'Vendor quotes', tasks:[
+      {t:'Quote: GC for general repairs'},
+      {t:'Quote: painter (with color options)'},
+      {t:'Quote: stager'},
+      {t:'Quote: carpet, interior, window cleaners'},
+      {t:'Schedule landscaper'},
+    ]},
+  ]},
+  {name:'Complete TDS/SPQ', col:'#2176ae', tint:'#ddeef8', groups:[
+    {name:'Documents', tasks:[
+      {t:'TC — send Glide invite to sellers'},
+      {t:'Send Glide onboarding email + Companion Guide', note:'Includes link to Glide and attached PDF guide.', link:'https://docs.google.com/document/d/19XXlPUZjqgTYv4-0kopYdeL4Kda1Mb-07dbBo6YA6wg/edit'},
+      {t:'Send early-view disclosures to client', link:'https://docs.google.com/document/d/1BclBJxFO1l81dx0cygO5ss3f1L8xhhEPDV0K4NFxy6I/edit?tab=t.0'},
+      {t:'Bring TDS and SPQ to client to start'},
+      {t:'Seller completes TDS and SPQ'},
+      {t:'Zoom to review TDS/SPQ after completion'},
+      {t:'AVID'},
+    ]},
+  ]},
+  {name:'Disclosures', col:'#1a5f8a', tint:'#e0f0fa', groups:[
+    {name:'Documents', tasks:[
+      {t:'Introduce TC to seller', note:'Use intro email template.'},
+      {t:'Utility bills and cap rate (investment properties only)'},
+    ]},
+    {name:'Access & keys', tasks:[
+      {t:'Confirm all keys received (garage, mailbox, doors, sheds)'},
+    ]},
+  ]},
+  {name:'Marketing', col:'#1a7a5e', tint:'#daf5ec', groups:[
+    {name:'Staging & cleaning', tasks:[
+      {t:'Send client marketing scope'},
+      {t:'Send email: A Staging Mindset', link:'https://docs.google.com/document/d/1xTAA-zcTi3wEEu9AFE2E6KyyKh0ji_DZhvIYfZX-a5s/edit?tab=t.0'},
+      {t:'Schedule stager'},
+      {t:'Schedule cleaner'},
+      {t:'Meet stager when complete, take photos'},
+      {t:'Notify seller of staging date and photo shoot'},
+    ]},
+    {name:'Photography & video', tasks:[
+      {t:'Schedule photographer — provide POI list, request floorplans', note:'Meet at property. Need at least one strong vertical shot.'},
+      {t:'Schedule videographer'},
+      {t:'Download all photos and video to Drive'},
+    ]},
+    {name:'Copy & assets', tasks:[
+      {t:'Client verbiage request — anything to highlight?'},
+      {t:'Verbiage approval from client'},
+      {t:'Welcome Home letter — share Google doc', link:'https://docs.google.com/document/d/17343zN3kakajYv1g9CIBBhESbuVe_SvxXq3CI076iZo/edit?tab=t.0'},
+      {t:'Generate Seller Proceeds estimate from Title Officer'},
+      {t:'Zoom with client: confirm list price (1+ wk before live)', link:'https://docs.google.com/document/d/1NHV6JIpg9oL11x6nihKHJg4CjDE9MHnyQ4wMLnR6Rr0/edit?tab=t.0'},
+    ]},
+    {name:'Collateral', tasks:[
+      {t:'Create property website and QR code'},
+      {t:'Create brochure with QR code'},
+      {t:'Create custom sign rider with QR'},
+      {t:'Create social media assets'},
+      {t:'Property blast to database'},
+      {t:'Property blast to MLS agents'},
+    ]},
+  ]},
+  {name:'Pre-MLS', col:'#7a2d6e', tint:'#f7e4f5', groups:[
+    {name:'Approvals', tasks:[
+      {t:'Get RO/Sabrina approval of packet before going live'},
+      {t:'Verify with sellers what is included in sale'},
+    ]},
+    {name:'MLS setup', tasks:[
+      {t:'Add property to MLS as draft or coming soon', note:'Do not include floor plan in MLS — appraiser access risk. Floor plan goes in disclosures only.'},
+      {t:'Upload disclosures to Disclosure IO; add offer instructions'},
+      {t:'Upload disclosures link to MLS once complete'},
+      {t:'Ensure disclosure packet requires pre-approval'},
+      {t:'Verify listing publishes to Zillow within 1 day of photos'},
+    ]},
+    {name:'Signage & launch', tasks:[
+      {t:'Install sign post'},
+      {t:'Share sign post date/time with seller'},
+      {t:'Install Coming Soon or Open Sat/Sun rider'},
+      {t:'Order food for Broker Tour (Arizmendi Focaccia)'},
+      {t:'Send Property Goes Live Tomorrow email', link:'https://docs.google.com/document/d/1WpRYJrUXn1wJ3FplUCbp0367bJ2a7RiK9y4sHXRQM_c/edit?tab=t.0'},
+    ]},
+  ]},
+  {name:'Open House', col:'#8a3020', tint:'#fae6e2', groups:[
+    {name:'Promotion', tasks:[
+      {t:'Post in Ad Review for broker tour (with Bitly link)'},
+      {t:'Create agent feedback spreadsheet'},
+      {t:'Block Friday before 1st weekend for door knocking'},
+      {t:'Print door knocking letters', link:'https://docs.google.com/document/d/1758DeDz-Y95KzYGNS-L5UMLH25I4R8KDgHfBkSyb_yQ/edit?tab=t.0'},
+      {t:'Fill out: Other Agent Covers OH — send email Thu prior'},
+    ]},
+    {name:'Print materials', tasks:[
+      {t:'Order For Sale signs'},
+      {t:'Print: Welcome Home letter, map, flyers, wayfinding signs, A-frame slips, Supra tag'},
+      {t:'Print seller improvements sheet', link:'https://docs.google.com/spreadsheets/d/1VZBO7tccMVUrJzKQUIM0fe4ppAxrv6kZGnarWdepX88/edit?gid=0#gid=0'},
+    ]},
+    {name:'Setup', tasks:[
+      {t:'Check Open House Kit'},
+      {t:'Create in-house wayfinding signs'},
+      {t:'Install rider on sign'},
+      {t:'Place doormat, booties basket, interior signage, table setup'},
+    ]},
+  ]},
+  {name:'Live on MLS', col:'#1a4a8a', tint:'#dce8f8', groups:[
+    {name:'Go live', tasks:[
+      {t:'Change MLS status to New'},
+      {t:"Send We're Live! to client", link:'https://docs.google.com/document/d/1YGPoiDwlKktO52ym3niNxWNvxUnbk_z6L5dy93w6RkA/edit?tab=t.0'},
+      {t:'Check Zillow Zestimate — update VOW-AVM setting', note:"Like the Zestimate → keep VOW-AVM Yes. Dislike it → set to No."},
+    ]},
+    {name:'Ongoing monitoring', tasks:[
+      {t:'Follow up on leads and agents who have toured'},
+      {t:'Monitor market — active and sold'},
+      {t:'Call update after 1st open house (Monday morning)'},
+      {t:'Call update after 2nd open house (Monday morning)'},
+    ]},
+    {name:'Offer process', tasks:[
+      {t:'Decide offer date with seller — create Zoom calendar link'},
+      {t:'Zoom with seller to review offers', link:'https://docs.google.com/spreadsheets/d/1VELeDY46BdBwxJOfolIQAdgYG9buzyR8LkG9cN438QU/edit?usp=drive_link'},
+      {t:'Create Post-Mortem'},
+    ]},
+  ]},
+  {name:'In Contract', col:'#2d6a4f', tint:'#d8f2e6', groups:[
+    {name:'Ratification', tasks:[
+      {t:'Send TC: ratified offer, pre-approval, POF, cover page, offer summary'},
+      {t:"Send buyer's agent TC name and title contact info"},
+      {t:'Archive disclosures (notify agent to download first)', note:'Change Disclosure IO permissions to REQUEST after archiving.'},
+      {t:'Change MLS status to Pending'},
+      {t:'Enter PEI for RO'},
+      {t:'Post social media: In Contract'},
+    ]},
+    {name:'Client setup', tasks:[
+      {t:'Send Meet the Team + Escrow Calendar to client', link:'https://docs.google.com/document/d/1kuubdCKD7OMOIpR1K1R2fnSLKuKLkTIr4q7nF0nJgl8/edit?tab=t.0'},
+      {t:'Enter contingency reminders in TickTick (1 day prior)'},
+      {t:'Ask lender to make me point of contact for appraisal'},
+      {t:'Place Pending rider on sign'},
+    ]},
+    {name:'Toward close', tasks:[
+      {t:'Arrange removal of staging (after appraisal)'},
+      {t:'Clarify invoices to be paid to vendors with Title'},
+      {t:'Order closing gift'},
+      {t:'1 wk prior COE: remind sellers to cancel utilities + change of address'},
+      {t:'1 wk prior COE: confirm sellers cleared all personal belongings'},
+      {t:'Change sign rider to Sold once contingencies cleared'},
+      {t:'2 days prior COE: remove flyer stand, flyers, sign rider, lockbox'},
+      {t:'Coordinate delivery of all keys + garage openers to buyers'},
+    ]},
+  ]},
+  {name:'Post-COE', col:'#3a5a1a', tint:'#e6f2d4', groups:[
+    {name:'Admin close-out', tasks:[
+      {t:'Distribute commission to YGG escrow accounts'},
+      {t:'Update MLS: Sold, update remarks, remove disclosure link, update offer count'},
+      {t:'Archive disclosure packet'},
+      {t:'Remove floor plans from MLS'},
+      {t:'Remove Supra after COE'},
+      {t:'Enter final details into Transaction History spreadsheet'},
+      {t:'Download rejected offers — send to client in separate folders'},
+    ]},
+    {name:'Client care', tasks:[
+      {t:'Send thank you email to sellers', link:'https://docs.google.com/document/d/1zXX9NguWv90Uyv6kGgQzVJepM9vdi5lGbDbwkLwn8ws/edit?tab=t.0'},
+      {t:'Call other agent — thank you'},
+      {t:'Send closing gift (gift cert in new neighborhood)'},
+      {t:'Request testimonial email', link:'https://docs.google.com/document/d/1y0hryyu37jme7Ayi-HRodgJ72r7AqYOgx1CQqZakQjM/edit?tab=t.0'},
+      {t:"Get client's new address — enter in FUB, tag #HolidayCard"},
+      {t:"Delete client's credit card info from Amazon"},
+    ]},
+    {name:'Wrap-up', tasks:[
+      {t:'Upload photos to social media folder'},
+      {t:'Post social media: Just Sold (Instagram + LinkedIn)'},
+      {t:'Fill in Post-Mortem while fresh'},
+      {t:'Enter 30-day post-COE call reminder'},
+    ]},
+  ]},
+];
+
+const MODULES = [
+  {id:'hoa', label:'HOA / Condo', inject:[
+    {phase:3, group:'Documents', tasks:[
+      {t:'Order HOA documents'},
+      {t:'Review HOA docs checklist', link:'https://docs.google.com/spreadsheets/d/1zxaNr6qwce3zioAGwId3zF8fuvZBJm8seTbM3sbFsR0/edit?gid=0#gid=0'},
+      {t:'Contact HOA manager'},
+      {t:'Find out HOA demand process once in escrow'},
+      {t:'Find out move-in/out policies or fees'},
+    ]},
+  ]},
+  {id:'solar', label:'Solar', inject:[
+    {phase:3, group:'Documents', tasks:[{t:'Obtain solar documentation'}]},
+    {phase:8, group:'Toward close', tasks:[
+      {t:'Initiate solar transfer with seller', note:'If buyer submitting non-contingent offer, confirm as-is verbiage for leased equipment.'},
+      {t:'1 wk prior COE: check in on solar transfer status'},
+    ]},
+  ]},
+  {id:'trust', label:'Held in trust', inject:[
+    {phase:3, group:'Documents', tasks:[{t:'Include Trust Advisory in disclosure packet'}]},
+  ]},
+  {id:'reno', label:'Major renovation', inject:[
+    {phase:1, group:'Vendor quotes', tasks:[
+      {t:'Schedule painter and flooring vendors'},
+      {t:'GC walk-through with seller to align on scope'},
+    ]},
+  ]},
+  {id:'piedmont', label:'Piedmont', inject:[
+    {phase:0, group:'Admin setup', tasks:[{t:'PSL / Home Energy Audit / Sidewalk / Order Permit History'}]},
+  ]},
+  {id:'investment', label:'Investment property', inject:[
+    {phase:8, group:'Ratification', tasks:[{t:'Ask Title to add estimated withholding tax line (~3.5%)'}]},
+  ]},
+];
+
+function clonePhases(){ return JSON.parse(JSON.stringify(BASE_PHASES)); }
+
+let listings = [
+  {id:'listing-1', name:'455 Lagunitas Ave', seller:'Darwin Farrar', checks:{}, nas:{}, modules:[], customPhases:null, activity:[], comps:[], notes:{}, docs:{}},
+];
+let activeIdx = 0;
+let drawerState = null;
+let editMode = false;
+let modalModules = [];
+let pendingDeleteIdx = null;
+let editingTask = null;
+let saveTimer = null;
+
+function L(){ return listings[activeIdx]; }
+function getPhases(){ return L().customPhases || clonePhases(); }
+function ensureCustomPhases(){ if(!L().customPhases) L().customPhases = clonePhases(); }
+
+// ─── SYNC ─────────────────────────────────────────────────────────────────────
+function setSyncStatus(state,text){
+  document.getElementById('syncDot').className='sync-dot '+state;
+  document.getElementById('syncLabel').textContent=text;
+}
+async function saveToSheet(key,value){
+  setSyncStatus('saving','saving…');
+  try {
+    await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({key,value})});
+    setSyncStatus('saved','saved');
+    setTimeout(()=>setSyncStatus('','ready'),2000);
+  } catch(e){ setSyncStatus('error','save failed'); }
+}
+async function loadFromSheet(){
+  setSyncStatus('saving','loading…');
+  try {
+    const res=await fetch(SCRIPT_URL);
+    const data=await res.json();
+    listings.forEach(l=>{
+      const raw=data[l.id];
+      if(raw){ try{
+        const p=JSON.parse(raw);
+        l.checks=p.checks||{}; l.nas=p.nas||{}; l.modules=p.modules||[];
+        if(p.customPhases&&p.userEdited) l.customPhases=p.customPhases; else l.customPhases=null;
+        l.activity=p.activity||[]; l.comps=p.comps||[];
+        l.notes=p.notes||{}; l.docs=p.docs||{};
+      }catch(e){} }
+    });
+    setSyncStatus('saved','loaded');
+    setTimeout(()=>setSyncStatus('','ready'),2000);
+  } catch(e){ setSyncStatus('error','could not load'); }
+  render();
+  renderDashboard();
+}
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const l=L();
+    saveToSheet(l.id,JSON.stringify({
+      checks:l.checks, nas:l.nas, modules:l.modules,
+      customPhases:l.customPhases, userEdited:!!l.customPhases,
+      activity:l.activity||[], comps:l.comps||[],
+      notes:l.notes||{}, docs:l.docs||{}
+    }));
+  },800);
+}
+
+// ─── PHASE BUILDING ───────────────────────────────────────────────────────────
+function buildPhases(){
+  const ph=JSON.parse(JSON.stringify(getPhases()));
+  L().modules.forEach(mid=>{
+    const mod=MODULES.find(m=>m.id===mid);
+    if(mod) mod.inject.forEach(x=>{
+      if(ph[x.phase]){
+        const g=ph[x.phase].groups.find(g=>g.name===x.group);
+        if(g) g.tasks=g.tasks.concat(JSON.parse(JSON.stringify(x.tasks)));
+      }
+    });
+  });
+  return ph;
+}
+function taskKey(pi,gi,ti){ return `${pi}-${gi}-${ti}`; }
+function naKey(pi,gi,ti){ return `na-${pi}-${gi}-${ti}`; }
+function groupStats(pi,gi,tasks){
+  const c=L().checks, na=L().nas||{};
+  let done=0, naCount=0;
+  tasks.forEach((_,ti)=>{ if(c[taskKey(pi,gi,ti)]) done++; else if(na[naKey(pi,gi,ti)]) naCount++; });
+  return {done,naCount,pending:tasks.length-done-naCount,total:tasks.length};
+}
+function totalStats(phases){
+  let total=0,done=0,naCount=0;
+  phases.forEach((p,pi)=>p.groups.forEach((g,gi)=>g.tasks.forEach((_,ti)=>{
+    total++;
+    if(L().checks[taskKey(pi,gi,ti)]) done++;
+    else if((L().nas||{})[naKey(pi,gi,ti)]) naCount++;
+  })));
+  return {total,done,naCount};
+}
+
+// ─── MAIN RENDER ─────────────────────────────────────────────────────────────
+function render(){
+  const phases=buildPhases();
+  const {total,done,naCount}=totalStats(phases);
+  const effective=total-naCount;
+  const pct=effective?Math.round(done/effective*100):0;
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progLabel').textContent=done+' of '+effective+' tasks · '+pct+'%';
+
+  const tabsEl=document.getElementById('tabsBar');
+  tabsEl.className='tabs-bar'+(editMode?' edit-mode':'');
+  tabsEl.innerHTML=listings.map((l,i)=>`
+    <div class="ltab-wrap ${i===activeIdx?'active':''}">
+      <button class="ltab" onclick="setListing(${i})">${l.name}</button>
+      <button class="ltab-del" onclick="askDelete(${i})" title="Remove">✕</button>
+    </div>`).join('')+`<button class="ltab-add" onclick="openNewModal()">+ New listing</button>`;
+
+  document.getElementById('board').innerHTML=phases.map((phase,pi)=>`
+    <div class="col" style="background:${phase.col};">
+      <div class="col-head">
+        <div class="col-head-name">${phase.name}</div>
+        <div class="col-head-count">${phase.groups.reduce((a,g)=>a+g.tasks.length,0)} tasks</div>
+      </div>
+      <div class="col-body">
+        ${phase.groups.map((g,gi)=>{
+          const s=groupStats(pi,gi,g.tasks);
+          const allResolved=s.pending===0;
+          return `<div class="gcard${allResolved?' all-done':''}${s.pending>0?' has-pending':''}" onclick="openDrawer(${pi},${gi})">
+            <div class="gcard-bar-wrap"><div class="gcard-bar-fill" style="width:${s.total?Math.round((s.done+s.naCount)/s.total*100):0}%;"></div></div>
+            <div class="gcard-name">${g.name}</div>
+            <div class="gcard-meta">
+              ${allResolved
+                ? '<span style="color:rgba(255,255,255,0.5);font-style:italic;">complete</span>'
+                : `<span>${s.done}/${s.total} done</span>${s.pending>0?`<span class="gcard-badge" style="color:${phase.col};">${s.pending} to do</span>`:''}`}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+
+  document.getElementById('modPills').innerHTML=MODULES.map(m=>
+    `<button class="mpill ${L().modules.includes(m.id)?'on':''}" onclick="toggleMod('${m.id}')">${L().modules.includes(m.id)?'✓ ':''}${m.label}</button>`
+  ).join('');
+
+  if(drawerState) renderDrawer(drawerState.pi,drawerState.gi);
+}
+
+// ─── DRAWER ───────────────────────────────────────────────────────────────────
+function openDrawer(pi,gi){
+  drawerState={pi,gi}; editingTask=null;
+  document.getElementById('overlay').classList.add('open');
+  renderDrawer(pi,gi);
+}
+function renderDrawer(pi,gi){
+  const phases=buildPhases(), phase=phases[pi], g=phase.groups[gi];
+  const c=L().checks, na=L().nas||{};
+  const s=groupStats(pi,gi,g.tasks);
+  document.getElementById('drawerHead').style.background=phase.col;
+  document.getElementById('drawerTint').style.background=phase.tint;
+  document.getElementById('dProg').style.color=phase.col;
+  document.getElementById('dPhase').textContent=phase.name;
+  document.getElementById('dGroup').textContent=g.name;
+  document.getElementById('dProg').textContent=s.done+' of '+(s.total-s.naCount)+' complete'+(s.naCount>0?' · '+s.naCount+' N/A':'');
+  const addBtn=document.getElementById('drawerAddBtn');
+  addBtn.style.borderColor=phase.col; addBtn.style.color=phase.col;
+  addBtn.style.display=editMode?'block':'none';
+  addBtn.onclick=()=>showAddTaskForm(pi,gi,phase.col);
+  document.getElementById('dTasks').innerHTML=g.tasks.map((task,ti)=>{
+    const key=taskKey(pi,gi,ti), nk=naKey(pi,gi,ti);
+    const done=!!c[key], isNA=!!na[nk];
+    const isEditing=editingTask&&editingTask.pi===pi&&editingTask.gi===gi&&editingTask.ti===ti;
+    return `<div class="task-row${isNA?' is-na':''}">
+      <div class="tcheck${done?' on':''}" style="${done?'background:'+phase.col+';border-color:'+phase.col+';':''}" onclick="${isNA?'':('toggleTask('+pi+','+gi+','+ti+')')}"></div>
+      <div class="task-content">
+        ${isEditing?buildEditForm(pi,gi,ti,task,phase.col):`
+          <div class="tlabel${done?' done':''}${isNA?' na-label':''}">${task.t}</div>
+          ${task.note&&!isNA?`<div class="tnote" style="border-left-color:${phase.col};">${task.note}</div>`:''}
+          ${task.link&&!done&&!isNA?`<a class="tlink" href="${task.link}" style="color:${phase.col};" target="_blank">↗ open template</a>`:''}`}
+      </div>
+      <div class="task-right">
+        ${!isEditing?`<button class="tna-btn${isNA?' na-active':''}" onclick="toggleNA(${pi},${gi},${ti})">${isNA?'undo N/A':'N/A'}</button>`:''}
+        <div class="task-edit-btns">
+          <button class="tebtn" onclick="startEditTask(${pi},${gi},${ti})">✎</button>
+          <button class="tebtn del" onclick="deleteTask(${pi},${gi},${ti})">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function buildEditForm(pi,gi,ti,task,col){
+  return `<div class="inline-edit">
+    <div class="ie-label">Task name</div>
+    <input class="ie-input" id="ie-label" value="${(task.t||'').replace(/"/g,'&quot;')}" />
+    <div class="ie-label">Template link (optional)</div>
+    <input class="ie-input" id="ie-link" value="${task.link||''}" placeholder="https://docs.google.com/..." />
+    <div class="ie-btns">
+      <button class="ie-btn ie-save" onclick="saveEditTask(${pi},${gi},${ti})" style="background:${col};">Save</button>
+      <button class="ie-btn ie-cancel" onclick="cancelEdit()">Cancel</button>
+    </div></div>`;
+}
+function startEditTask(pi,gi,ti){ editingTask={pi,gi,ti}; renderDrawer(pi,gi); }
+function cancelEdit(){ editingTask=null; renderDrawer(drawerState.pi,drawerState.gi); }
+function saveEditTask(pi,gi,ti){
+  ensureCustomPhases();
+  const label=document.getElementById('ie-label').value.trim();
+  const link=document.getElementById('ie-link').value.trim();
+  if(!label) return;
+  L().customPhases[pi].groups[gi].tasks[ti].t=label;
+  L().customPhases[pi].groups[gi].tasks[ti].link=link||'';
+  editingTask=null; scheduleSave(); render();
+}
+function deleteTask(pi,gi,ti){
+  if(!confirm('Remove this task?')) return;
+  ensureCustomPhases();
+  L().customPhases[pi].groups[gi].tasks.splice(ti,1);
+  const newC={}, newNA={};
+  Object.keys(L().checks).forEach(k=>{ const p=k.split('-').map(Number); if(p[0]===pi&&p[1]===gi){ if(p[2]<ti) newC[k]=L().checks[k]; else if(p[2]>ti) newC[taskKey(pi,gi,p[2]-1)]=L().checks[k]; } else newC[k]=L().checks[k]; });
+  Object.keys(L().nas||{}).forEach(k=>{ const p=k.replace('na-','').split('-').map(Number); if(p[0]===pi&&p[1]===gi){ if(p[2]<ti) newNA[k]=L().nas[k]; else if(p[2]>ti) newNA[naKey(pi,gi,p[2]-1)]=L().nas[k]; } else newNA[k]=L().nas[k]; });
+  L().checks=newC; L().nas=newNA; scheduleSave(); render();
+}
+function showAddTaskForm(pi,gi,col){
+  const container=document.getElementById('dTasks');
+  const div=document.createElement('div');
+  div.className='inline-edit'; div.style.margin='12px 0';
+  div.innerHTML=`<div class="ie-label">New task name</div>
+    <input class="ie-input" id="new-task-label" placeholder="e.g. Send introduction email" />
+    <div class="ie-label">Template link (optional)</div>
+    <input class="ie-input" id="new-task-link" placeholder="https://docs.google.com/..." />
+    <div class="ie-btns">
+      <button class="ie-btn ie-save" onclick="addTask(${pi},${gi})" style="background:${col};">Add task</button>
+      <button class="ie-btn ie-cancel" onclick="this.closest('.inline-edit').remove()">Cancel</button>
+    </div>`;
+  container.appendChild(div);
+  div.querySelector('#new-task-label').focus();
+}
+function addTask(pi,gi){
+  const label=document.getElementById('new-task-label').value.trim();
+  const link=document.getElementById('new-task-link').value.trim();
+  if(!label) return;
+  ensureCustomPhases();
+  L().customPhases[pi].groups[gi].tasks.push({t:label,link:link||''});
+  scheduleSave(); render();
+}
+function closeDrawer(){
+  document.getElementById('overlay').classList.remove('open');
+  drawerState=null; editingTask=null;
+}
+function toggleTask(pi,gi,ti){
+  const key=taskKey(pi,gi,ti);
+  L().checks[key]=!L().checks[key];
+  scheduleSave(); renderDrawer(pi,gi); render();
+}
+function toggleNA(pi,gi,ti){
+  if(!L().nas) L().nas={};
+  const nk=naKey(pi,gi,ti);
+  L().nas[nk]=!L().nas[nk];
+  if(L().nas[nk]) delete L().checks[taskKey(pi,gi,ti)];
+  scheduleSave(); renderDrawer(pi,gi); render();
+}
+function setListing(i){ activeIdx=i; closeDrawer(); render(); renderDashboard(); }
+function toggleMod(id){
+  const l=L(), idx=l.modules.indexOf(id);
+  if(idx===-1) l.modules.push(id); else l.modules.splice(idx,1);
+  scheduleSave(); render();
+}
+function toggleEditMode(){
+  editMode=!editMode;
+  document.getElementById('editToggle').textContent=editMode?'✓ Done':'✏ Edit';
+  document.getElementById('editToggle').className='edit-toggle'+(editMode?' active':'');
+  document.getElementById('editBanner').className='edit-banner'+(editMode?' show':'');
+  render();
+}
+
+// ─── NEW LISTING ──────────────────────────────────────────────────────────────
+function openNewModal(){
+  modalModules=[];
+  document.getElementById('newAddress').value='';
+  document.getElementById('newSeller').value='';
+  document.getElementById('modalPills').innerHTML=MODULES.map(m=>
+    `<button class="modal-pill" onclick="toggleModalMod('${m.id}',this)">${m.label}</button>`
+  ).join('');
+  document.getElementById('modalNew').classList.add('open');
+  setTimeout(()=>document.getElementById('newAddress').focus(),100);
+}
+function toggleModalMod(id,btn){
+  const idx=modalModules.indexOf(id);
+  if(idx===-1){ modalModules.push(id); btn.classList.add('on'); btn.textContent='✓ '+btn.textContent; }
+  else { modalModules.splice(idx,1); btn.classList.remove('on'); btn.textContent=btn.textContent.replace('✓ ',''); }
+}
+function createListing(){
+  const addr=document.getElementById('newAddress').value.trim();
+  const seller=document.getElementById('newSeller').value.trim();
+  if(!addr){ document.getElementById('newAddress').focus(); return; }
+  const id='listing-'+Date.now();
+  listings.push({id,name:addr,seller:seller||'',checks:{},nas:{},modules:[...modalModules],customPhases:null,activity:[],comps:[],notes:{},docs:{}});
+  activeIdx=listings.length-1;
+  document.getElementById('modalNew').classList.remove('open');
+  render(); renderDashboard();
+  saveToSheet(L().id,JSON.stringify({checks:{},nas:{},modules:[...modalModules]}));
+}
+function askDelete(i){
+  pendingDeleteIdx=i;
+  document.getElementById('confirmText').textContent=`This will remove "${listings[i].name}" and clear all its saved progress. This cannot be undone.`;
+  document.getElementById('modalConfirm').classList.add('open');
+}
+function confirmDelete(){
+  if(pendingDeleteIdx===null) return;
+  saveToSheet(listings[pendingDeleteIdx].id,JSON.stringify({deleted:true}));
+  listings.splice(pendingDeleteIdx,1);
+  if(activeIdx>=listings.length) activeIdx=listings.length-1;
+  if(listings.length===0) listings.push({id:'listing-'+Date.now(),name:'New listing',seller:'',checks:{},nas:{},modules:[],customPhases:null,activity:[],comps:[],notes:{},docs:{}});
+  pendingDeleteIdx=null;
+  document.getElementById('modalConfirm').classList.remove('open');
+  closeDrawer(); render(); renderDashboard();
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+const DASH_CARDS = [
+  {id:'activity',    icon:'📋', name:'Activity Log',    sub:'Track agent inquiries',        col:'#5c3d8f', tint:'#f0ebfc'},
+  {id:'comps',       icon:'🏡', name:'Comps',           sub:'Neighborhood comparables',     col:'#1a5f8a', tint:'#e0f0fa'},
+  {id:'notes',       icon:'📝', name:'Property Notes',  sub:'Details, highlights & more',   col:'#1a7a5e', tint:'#daf5ec'},
+  {id:'copy',        icon:'✍️', name:'Marketing Copy',  sub:'Listing description & social', col:'#7a2d6e', tint:'#f7e4f5'},
+  {id:'postmortem',  icon:'🔍', name:'Post-Mortem',      sub:'Learnings & reflections',      col:'#3a5a1a', tint:'#e6f2d4'},
+];
+function renderDashboard(){
+  const el=document.getElementById('dashGrid');
+  if(!el) return;
+  el.innerHTML=DASH_CARDS.map(c=>`
+    <div class="dash-card" style="background:#f5efe6;border:1px solid #e0d5c5;" onclick="openPanel('${c.id}')">
+      <span class="dash-card-icon">${c.icon}</span>
+      <div class="dash-card-name" style="color:${c.col};">${c.name}</div>
+      <div class="dash-card-sub" style="color:${c.col};">${c.sub}</div>
+    </div>`).join('');
+}
+function openPanel(id){
+  const card=DASH_CARDS.find(c=>c.id===id);
+  document.getElementById('panelIcon').textContent=card.icon;
+  document.getElementById('panelTitle').textContent=card.name;
+  document.getElementById('panelSub').textContent=L().name;
+  document.getElementById('panelOverlay').classList.add('open');
+  const body=document.getElementById('panelBody');
+  if(id==='activity') body.innerHTML=renderActivity();
+  else if(id==='comps') body.innerHTML=renderComps();
+  else if(id==='notes') body.innerHTML=renderNotes();
+  else if(id==='copy') body.innerHTML=renderBlank('copy','Marketing copy for this listing…');
+  else if(id==='postmortem') body.innerHTML=renderBlank('postmortem','Post-mortem notes — what worked, what to improve, offer summary…');
+}
+function closePanel(){
+  document.getElementById('panelOverlay').classList.remove('open');
+}
+
+// ─── ACTIVITY LOG ─────────────────────────────────────────────────────────────
+function renderActivity(){
+  const agents=L().activity||[];
+  return `<button class="act-add-btn" onclick="toggleNAF()">+ Add agent</button>
+    <div class="naf" id="nafForm">
+      <div class="naf-title">New agent</div>
+      <div class="naf-grid">
+        <input class="naf-input" id="nafName" placeholder="Agent name" />
+        <input class="naf-input" id="nafBrokerage" placeholder="Brokerage" />
+        <input class="naf-input" id="nafPhone" placeholder="Phone" />
+        <input class="naf-input" id="nafEmail" placeholder="Email" />
+      </div>
+      <div class="naf-btns">
+        <button class="naf-btn naf-save" onclick="saveAgent()">Add agent</button>
+        <button class="naf-btn naf-cancel" onclick="toggleNAF()">Cancel</button>
+      </div>
+    </div>
+    <div id="agentsList">${agents.length===0?'<div style="color:#bbb;font-size:13px;padding:12px 0;">No agents logged yet.</div>':agents.map((a,i)=>renderAgentCard(a,i)).join('')}</div>`;
+}
+function renderAgentCard(a,i){
+  return `<div class="agent-card${a.open?' aopen':''}" id="ac-${i}">
+    <div class="agent-head" onclick="toggleAgent(${i})">
+      <div><div class="agent-name">${a.name}</div><div class="agent-brokerage">${a.brokerage||''}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="font-size:11px;color:#aaa;">${(a.contacts||[]).length} contact${(a.contacts||[]).length===1?'':'s'}</div>
+        <div class="agent-chevron">▼</div>
+      </div>
+    </div>
+    <div class="agent-body">
+      <div class="agent-contact">
+        ${a.phone?`<div class="agent-ci"><b>Phone</b>${a.phone}</div>`:''}
+        ${a.email?`<div class="agent-ci"><b>Email</b>${a.email}</div>`:''}
+      </div>
+      <div class="log-title">Contact history</div>
+      ${(a.contacts||[]).map(c=>`<div class="log-entry"><div class="log-date">${c.date}</div><div class="log-note">${c.note}</div></div>`).join('')}
+      <div class="log-add">
+        <input class="log-input" id="logDate-${i}" type="date" value="${new Date().toISOString().split('T')[0]}" />
+        <input class="log-input" id="logNote-${i}" placeholder="Notes from this conversation…" style="flex:2;" />
+        <button class="log-submit" onclick="addContact(${i})">Add</button>
+      </div>
+      <button class="agent-del" onclick="deleteAgent(${i})">Remove agent</button>
+    </div>
+  </div>`;
+}
+function toggleNAF(){ const f=document.getElementById('nafForm'); f.classList.toggle('open'); if(f.classList.contains('open')) document.getElementById('nafName').focus(); }
+function saveAgent(){
+  const name=document.getElementById('nafName').value.trim();
+  if(!name) return;
+  if(!L().activity) L().activity=[];
+  L().activity.push({name, brokerage:document.getElementById('nafBrokerage').value.trim(), phone:document.getElementById('nafPhone').value.trim(), email:document.getElementById('nafEmail').value.trim(), contacts:[], open:true});
+  scheduleSave();
+  document.getElementById('panelBody').innerHTML=renderActivity();
+}
+function toggleAgent(i){ L().activity[i].open=!L().activity[i].open; document.getElementById('panelBody').innerHTML=renderActivity(); }
+function addContact(i){
+  const date=document.getElementById('logDate-'+i).value;
+  const note=document.getElementById('logNote-'+i).value.trim();
+  if(!note) return;
+  if(!L().activity[i].contacts) L().activity[i].contacts=[];
+  L().activity[i].contacts.push({date:date||new Date().toISOString().split('T')[0],note});
+  L().activity[i].open=true;
+  scheduleSave();
+  document.getElementById('panelBody').innerHTML=renderActivity();
+}
+function deleteAgent(i){ if(!confirm('Remove this agent?')) return; L().activity.splice(i,1); scheduleSave(); document.getElementById('panelBody').innerHTML=renderActivity(); }
+
+// ─── COMPS ────────────────────────────────────────────────────────────────────
+function renderComps(){
+  const comps=L().comps||[];
+  return `<button class="comp-add-btn" onclick="toggleCompForm()">+ Add comp</button>
+    <div class="comp-form" id="compForm">
+      <div class="comp-fields">
+        <input class="comp-field full" id="cf-address" placeholder="Address" />
+        <input class="comp-field" id="cf-beds" placeholder="Beds/Baths (e.g. 3/2)" />
+        <input class="comp-field" id="cf-sqft" placeholder="Sq ft" />
+        <input class="comp-field" id="cf-listprice" placeholder="List price" />
+        <input class="comp-field" id="cf-saleprice" placeholder="Sale price" />
+        <input class="comp-field" id="cf-date" placeholder="Sale date" />
+        <input class="comp-field" id="cf-agent" placeholder="Agent name" />
+        <input class="comp-field full" id="cf-notes" placeholder="Notes" />
+      </div>
+      <div class="comp-form-btns">
+        <button class="comp-submit" onclick="saveComp()">Add comp</button>
+        <button class="comp-cancel" onclick="toggleCompForm()">Cancel</button>
+      </div>
+    </div>
+    <div class="comps-list">${comps.length===0?'<div style="color:#bbb;font-size:13px;padding:12px 0;">No comps added yet.</div>':comps.map((c,i)=>renderCompCard(c,i)).join('')}</div>`;
+}
+function renderCompCard(c,i){
+  return `<div class="comp-card">
+    <div class="comp-address">${c.address}</div>
+    <div class="comp-row">
+      ${c.beds?`<div class="comp-item"><b>Beds/Baths</b>${c.beds}</div>`:''}
+      ${c.sqft?`<div class="comp-item"><b>Sq ft</b>${c.sqft}</div>`:''}
+      ${c.listprice?`<div class="comp-item"><b>List price</b>${c.listprice}</div>`:''}
+      ${c.saleprice?`<div class="comp-item"><b>Sale price</b>${c.saleprice}</div>`:''}
+      ${c.date?`<div class="comp-item"><b>Date</b>${c.date}</div>`:''}
+      ${c.agent?`<div class="comp-item"><b>Agent</b>${c.agent}</div>`:''}
+    </div>
+    ${c.notes?`<div class="comp-notes-text">${c.notes}</div>`:''}
+    <button class="comp-del" onclick="deleteComp(${i})">Remove</button>
+  </div>`;
+}
+function toggleCompForm(){ document.getElementById('compForm').classList.toggle('open'); }
+function saveComp(){
+  const address=document.getElementById('cf-address').value.trim();
+  if(!address) return;
+  if(!L().comps) L().comps=[];
+  L().comps.push({address, beds:document.getElementById('cf-beds').value.trim(), sqft:document.getElementById('cf-sqft').value.trim(), listprice:document.getElementById('cf-listprice').value.trim(), saleprice:document.getElementById('cf-saleprice').value.trim(), date:document.getElementById('cf-date').value.trim(), agent:document.getElementById('cf-agent').value.trim(), notes:document.getElementById('cf-notes').value.trim()});
+  scheduleSave();
+  document.getElementById('panelBody').innerHTML=renderComps();
+}
+function deleteComp(i){ if(!confirm('Remove this comp?')) return; L().comps.splice(i,1); scheduleSave(); document.getElementById('panelBody').innerHTML=renderComps(); }
+
+// ─── PROPERTY NOTES ───────────────────────────────────────────────────────────
+function renderNotes(){
+  if(!L().notes) L().notes={};
+  return '<div class="notes-sections">'+['Details','Highlights','Drawbacks','Other'].map(s=>`
+    <div class="notes-section">
+      <div class="notes-sec-head"><div class="notes-sec-name">${s}</div></div>
+      <textarea class="notes-ta" placeholder="Add ${s.toLowerCase()} notes…" oninput="saveNote('${s}',this.value)">${L().notes[s]||''}</textarea>
+    </div>`).join('')+'</div>';
+}
+function saveNote(section,value){ if(!L().notes) L().notes={}; L().notes[section]=value; scheduleSave(); }
+
+// ─── BLANK DOCS ───────────────────────────────────────────────────────────────
+function renderBlank(key,placeholder){
+  if(!L().docs) L().docs={};
+  return `<textarea class="blank-ta" placeholder="${placeholder}" oninput="saveDoc('${key}',this.value)">${L().docs[key]||''}</textarea>`;
+}
+function saveDoc(key,value){ if(!L().docs) L().docs={}; L().docs[key]=value; scheduleSave(); }
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('overlay').addEventListener('click',e=>{ if(e.target===document.getElementById('overlay')) closeDrawer(); });
+  document.getElementById('panelOverlay').addEventListener('click',e=>{ if(e.target===document.getElementById('panelOverlay')) closePanel(); });
+  document.getElementById('modalNew').addEventListener('click',e=>{ if(e.target===document.getElementById('modalNew')) document.getElementById('modalNew').classList.remove('open'); });
+  document.getElementById('modalConfirm').addEventListener('click',e=>{ if(e.target===document.getElementById('modalConfirm')) document.getElementById('modalConfirm').classList.remove('open'); });
+  loadFromSheet();
+});
+</script>
+</body>
+</html>
