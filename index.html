@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Your Guide Gail — Listing Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=Homemade+Apple&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%234b8b3b'/></svg>">
 <style>
   :root { --green: #4b8b3b; --green-light: #eaf3de; --font-head: 'Homemade Apple', cursive; --font-body: 'Jost', sans-serif; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -626,6 +627,29 @@ async function loadFromSheet(){
   try {
     const res=await fetch(SCRIPT_URL);
     const data=await res.json();
+
+    // Restore master listing index if it exists
+    const masterRaw = data['__listings_index__'];
+    if(masterRaw){
+      try {
+        const masterList = JSON.parse(masterRaw);
+        // Rebuild listings array from saved index, preserving any hardcoded ones not in index
+        const rebuilt = masterList.map(meta => ({
+          id: meta.id,
+          name: meta.name,
+          seller: meta.seller || '',
+          checks:{}, nas:{}, modules:[], customPhases:null,
+          activity:[], comps:[], notes:{}, docs:{}
+        }));
+        // Make sure listing-1 (455 Lagunitas) is always present
+        if(!rebuilt.find(l=>l.id==='listing-1')){
+          rebuilt.unshift(listings[0]);
+        }
+        listings = rebuilt;
+      } catch(e){}
+    }
+
+    // Now load each listing's data
     listings.forEach(l=>{
       const raw=data[l.id];
       if(raw){ try{
@@ -634,6 +658,7 @@ async function loadFromSheet(){
         if(p.customPhases&&p.userEdited) l.customPhases=p.customPhases; else l.customPhases=null;
         l.activity=p.activity||[]; l.comps=p.comps||[];
         l.notes=p.notes||{}; l.docs=p.docs||{};
+        l.reimbursements=p.reimbursements||[];
       }catch(e){} }
     });
     setSyncStatus('saved','loaded');
@@ -650,7 +675,8 @@ function scheduleSave(){
       checks:l.checks, nas:l.nas, modules:l.modules,
       customPhases:l.customPhases, userEdited:!!l.customPhases,
       activity:l.activity||[], comps:l.comps||[],
-      notes:l.notes||{}, docs:l.docs||{}
+      notes:l.notes||{}, docs:l.docs||{},
+      reimbursements:l.reimbursements||[]
     }));
   },800);
 }
@@ -881,11 +907,12 @@ function createListing(){
   const seller=document.getElementById('newSeller').value.trim();
   if(!addr){ document.getElementById('newAddress').focus(); return; }
   const id='listing-'+Date.now();
-  listings.push({id,name:addr,seller:seller||'',checks:{},nas:{},modules:[...modalModules],customPhases:null,activity:[],comps:[],notes:{},docs:{}});
+  listings.push({id,name:addr,seller:seller||'',checks:{},nas:{},modules:[...modalModules],customPhases:null,activity:[],comps:[],notes:{},docs:{},reimbursements:[]});
   activeIdx=listings.length-1;
   document.getElementById('modalNew').classList.remove('open');
   render(); renderDashboard();
   saveToSheet(L().id,JSON.stringify({checks:{},nas:{},modules:[...modalModules]}));
+  saveMasterIndex();
 }
 function askDelete(i){
   pendingDeleteIdx=i;
@@ -901,16 +928,23 @@ function confirmDelete(){
   pendingDeleteIdx=null;
   document.getElementById('modalConfirm').classList.remove('open');
   closeDrawer(); render(); renderDashboard();
+  saveMasterIndex();
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 const DASH_CARDS = [
-  {id:'activity',    icon:'📋', name:'Activity Log',    sub:'Track agent inquiries',        col:'#5c3d8f', tint:'#f0ebfc'},
-  {id:'comps',       icon:'🏡', name:'Comps',           sub:'Neighborhood comparables',     col:'#1a5f8a', tint:'#e0f0fa'},
-  {id:'notes',       icon:'📝', name:'Property Notes',  sub:'Details, highlights & more',   col:'#1a7a5e', tint:'#daf5ec'},
-  {id:'copy',        icon:'✍️', name:'Marketing Copy',  sub:'Listing description & social', col:'#7a2d6e', tint:'#f7e4f5'},
-  {id:'postmortem',  icon:'🔍', name:'Post-Mortem',      sub:'Learnings & reflections',      col:'#3a5a1a', tint:'#e6f2d4'},
+  {id:'activity',       icon:'📋', name:'Activity Log',      sub:'Track agent inquiries',        col:'#5c3d8f', tint:'#f0ebfc'},
+  {id:'comps',          icon:'🏡', name:'Comps',             sub:'Neighborhood comparables',     col:'#1a5f8a', tint:'#e0f0fa'},
+  {id:'notes',          icon:'📝', name:'Property Notes',    sub:'Details, highlights & more',   col:'#1a7a5e', tint:'#daf5ec'},
+  {id:'reimbursements', icon:'💰', name:'Reimbursements',    sub:'Track expenses & receipts',    col:'#8a4f1a', tint:'#faf0e2'},
+  {id:'copy',           icon:'✍️', name:'Marketing Copy',    sub:'Listing description & social', col:'#7a2d6e', tint:'#f7e4f5'},
+  {id:'postmortem',     icon:'🔍', name:'Post-Mortem',       sub:'Learnings & reflections',      col:'#3a5a1a', tint:'#e6f2d4'},
 ];
+function saveMasterIndex(){
+  const index = listings.map(l=>({id:l.id, name:l.name, seller:l.seller||''}));
+  saveToSheet('__listings_index__', JSON.stringify(index));
+}
+
 function renderDashboard(){
   const el=document.getElementById('dashGrid');
   if(!el) return;
@@ -932,6 +966,7 @@ function openPanel(id){
   else if(id==='comps') body.innerHTML=renderComps();
   else if(id==='notes') body.innerHTML=renderNotes();
   else if(id==='copy') body.innerHTML=renderBlank('copy','Marketing copy for this listing…');
+  else if(id==='reimbursements') body.innerHTML=renderReimbursements();
   else if(id==='postmortem') body.innerHTML=renderBlank('postmortem','Post-mortem notes — what worked, what to improve, offer summary…');
 }
 function closePanel(){
@@ -1017,6 +1052,7 @@ function renderComps(){
         <input class="comp-field" id="cf-saleprice" placeholder="Sale price" />
         <input class="comp-field" id="cf-date" placeholder="Sale date" />
         <input class="comp-field" id="cf-agent" placeholder="Agent name" />
+        <input class="comp-field full" id="cf-url" placeholder="Listing URL (optional)" />
         <input class="comp-field full" id="cf-notes" placeholder="Notes" />
       </div>
       <div class="comp-form-btns">
@@ -1024,11 +1060,35 @@ function renderComps(){
         <button class="comp-cancel" onclick="toggleCompForm()">Cancel</button>
       </div>
     </div>
-    <div class="comps-list">${comps.length===0?'<div style="color:#bbb;font-size:13px;padding:12px 0;">No comps added yet.</div>':comps.map((c,i)=>renderCompCard(c,i)).join('')}</div>`;
+    <div class="comps-list" id="compsList">${comps.length===0?'<div style="color:#bbb;font-size:13px;padding:12px 0;">No comps added yet.</div>':comps.map((c,i)=>renderCompCard(c,i)).join('')}</div>`;
 }
 function renderCompCard(c,i){
+  if(c._editing) return `<div class="comp-card">
+    <div class="comp-fields" style="margin-bottom:8px;">
+      <input class="comp-field full" id="ce-address-${i}" value="${(c.address||'').replace(/"/g,'&quot;')}" placeholder="Address" />
+      <input class="comp-field" id="ce-beds-${i}" value="${(c.beds||'').replace(/"/g,'&quot;')}" placeholder="Beds/Baths" />
+      <input class="comp-field" id="ce-sqft-${i}" value="${(c.sqft||'').replace(/"/g,'&quot;')}" placeholder="Sq ft" />
+      <input class="comp-field" id="ce-listprice-${i}" value="${(c.listprice||'').replace(/"/g,'&quot;')}" placeholder="List price" />
+      <input class="comp-field" id="ce-saleprice-${i}" value="${(c.saleprice||'').replace(/"/g,'&quot;')}" placeholder="Sale price" />
+      <input class="comp-field" id="ce-date-${i}" value="${(c.date||'').replace(/"/g,'&quot;')}" placeholder="Sale date" />
+      <input class="comp-field" id="ce-agent-${i}" value="${(c.agent||'').replace(/"/g,'&quot;')}" placeholder="Agent name" />
+      <input class="comp-field full" id="ce-url-${i}" value="${(c.url||'').replace(/"/g,'&quot;')}" placeholder="Listing URL (optional)" />
+      <input class="comp-field full" id="ce-notes-${i}" value="${(c.notes||'').replace(/"/g,'&quot;')}" placeholder="Notes" />
+    </div>
+    <div class="comp-form-btns">
+      <button class="comp-submit" onclick="saveCompEdit(${i})">Save</button>
+      <button class="comp-cancel" onclick="cancelCompEdit(${i})">Cancel</button>
+    </div>
+  </div>`;
   return `<div class="comp-card">
-    <div class="comp-address">${c.address}</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+      <div class="comp-address">${c.address}</div>
+      <div style="display:flex;gap:6px;">
+        ${c.url?`<a href="${c.url}" target="_blank" style="font-size:11px;color:#1a5f8a;font-weight:500;text-decoration:none;padding:2px 8px;border:1px solid #c0d8ee;border-radius:10px;">↗ view</a>`:''}
+        <button class="comp-del" style="margin:0;" onclick="startCompEdit(${i})">Edit</button>
+        <button class="comp-del" style="margin:0;" onclick="deleteComp(${i})">Remove</button>
+      </div>
+    </div>
     <div class="comp-row">
       ${c.beds?`<div class="comp-item"><b>Beds/Baths</b>${c.beds}</div>`:''}
       ${c.sqft?`<div class="comp-item"><b>Sq ft</b>${c.sqft}</div>`:''}
@@ -1038,7 +1098,6 @@ function renderCompCard(c,i){
       ${c.agent?`<div class="comp-item"><b>Agent</b>${c.agent}</div>`:''}
     </div>
     ${c.notes?`<div class="comp-notes-text">${c.notes}</div>`:''}
-    <button class="comp-del" onclick="deleteComp(${i})">Remove</button>
   </div>`;
 }
 function toggleCompForm(){ document.getElementById('compForm').classList.toggle('open'); }
@@ -1046,7 +1105,33 @@ function saveComp(){
   const address=document.getElementById('cf-address').value.trim();
   if(!address) return;
   if(!L().comps) L().comps=[];
-  L().comps.push({address, beds:document.getElementById('cf-beds').value.trim(), sqft:document.getElementById('cf-sqft').value.trim(), listprice:document.getElementById('cf-listprice').value.trim(), saleprice:document.getElementById('cf-saleprice').value.trim(), date:document.getElementById('cf-date').value.trim(), agent:document.getElementById('cf-agent').value.trim(), notes:document.getElementById('cf-notes').value.trim()});
+  L().comps.push({
+    address, beds:document.getElementById('cf-beds').value.trim(),
+    sqft:document.getElementById('cf-sqft').value.trim(),
+    listprice:document.getElementById('cf-listprice').value.trim(),
+    saleprice:document.getElementById('cf-saleprice').value.trim(),
+    date:document.getElementById('cf-date').value.trim(),
+    agent:document.getElementById('cf-agent').value.trim(),
+    url:document.getElementById('cf-url').value.trim(),
+    notes:document.getElementById('cf-notes').value.trim()
+  });
+  scheduleSave();
+  document.getElementById('panelBody').innerHTML=renderComps();
+}
+function startCompEdit(i){ L().comps[i]._editing=true; document.getElementById('panelBody').innerHTML=renderComps(); }
+function cancelCompEdit(i){ delete L().comps[i]._editing; document.getElementById('panelBody').innerHTML=renderComps(); }
+function saveCompEdit(i){
+  const c=L().comps[i];
+  c.address=document.getElementById('ce-address-'+i).value.trim();
+  c.beds=document.getElementById('ce-beds-'+i).value.trim();
+  c.sqft=document.getElementById('ce-sqft-'+i).value.trim();
+  c.listprice=document.getElementById('ce-listprice-'+i).value.trim();
+  c.saleprice=document.getElementById('ce-saleprice-'+i).value.trim();
+  c.date=document.getElementById('ce-date-'+i).value.trim();
+  c.agent=document.getElementById('ce-agent-'+i).value.trim();
+  c.url=document.getElementById('ce-url-'+i).value.trim();
+  c.notes=document.getElementById('ce-notes-'+i).value.trim();
+  delete c._editing;
   scheduleSave();
   document.getElementById('panelBody').innerHTML=renderComps();
 }
@@ -1055,13 +1140,101 @@ function deleteComp(i){ if(!confirm('Remove this comp?')) return; L().comps.spli
 // ─── PROPERTY NOTES ───────────────────────────────────────────────────────────
 function renderNotes(){
   if(!L().notes) L().notes={};
-  return '<div class="notes-sections">'+['Details','Highlights','Drawbacks','Other'].map(s=>`
+  const sections=['Details','Highlights','Drawbacks','Other'];
+  const sysFields=['Electric','Roof','Plumbing/Water Heater','HVAC','Foundation','Other'];
+  return '<div class="notes-sections">'
+    +sections.map(s=>`
     <div class="notes-section">
       <div class="notes-sec-head"><div class="notes-sec-name">${s}</div></div>
       <textarea class="notes-ta" placeholder="Add ${s.toLowerCase()} notes…" oninput="saveNote('${s}',this.value)">${L().notes[s]||''}</textarea>
-    </div>`).join('')+'</div>';
+    </div>`).join('')
+    +`<div class="notes-section">
+      <div class="notes-sec-head"><div class="notes-sec-name">Systems</div></div>
+      <div style="padding:8px 16px 14px;background:#fff;border-top:1px solid #f0ece6;">
+        ${sysFields.map(f=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid #f5f2ee;">
+          <div style="font-size:12px;font-weight:500;color:#777;width:170px;flex-shrink:0;">${f}</div>
+          <input type="text" style="flex:1;padding:5px 10px;border:1.5px solid #e0dbd4;border-radius:7px;font-size:12px;font-family:var(--font-body);outline:none;background:#fafaf8;"
+            placeholder="Notes…"
+            value="${(L().notes['sys_'+f]||'').replace(/"/g,'&quot;')}"
+            oninput="saveNote('sys_${f}',this.value)" />
+        </div>`).join('')}
+      </div>
+    </div>`
+    +'</div>';
 }
 function saveNote(section,value){ if(!L().notes) L().notes={}; L().notes[section]=value; scheduleSave(); }
+
+// ─── REIMBURSEMENTS ───────────────────────────────────────────────────────────
+function renderReimbursements(){
+  const items=L().reimbursements||[];
+  const total=items.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  const unpaid=items.filter(r=>!r.paid).reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;gap:16px;">
+        <div style="font-size:12px;color:#888;">Total: <strong style="color:#222;">$${total.toFixed(2)}</strong></div>
+        <div style="font-size:12px;color:#888;">Outstanding: <strong style="color:${unpaid>0?'#c0392b':'#2e6b26'};">$${unpaid.toFixed(2)}</strong></div>
+      </div>
+      <button class="comp-add-btn" style="margin:0;" onclick="toggleReimbForm()">+ Add item</button>
+    </div>
+    <div class="comp-form" id="reimbForm">
+      <div class="comp-fields">
+        <input class="comp-field full" id="rf-desc" placeholder="Description (e.g. Painter deposit)" />
+        <input class="comp-field" id="rf-amount" placeholder="Amount (e.g. 250.00)" type="number" step="0.01" />
+        <input class="comp-field" id="rf-date" placeholder="Date" />
+        <input class="comp-field full" id="rf-receipt" placeholder="Receipt link (Google Drive URL, optional)" />
+        <input class="comp-field full" id="rf-notes" placeholder="Notes (optional)" />
+      </div>
+      <div class="comp-form-btns">
+        <button class="comp-submit" onclick="saveReimb()">Add item</button>
+        <button class="comp-cancel" onclick="toggleReimbForm()">Cancel</button>
+      </div>
+    </div>
+    <div id="reimbList">
+      ${items.length===0
+        ? '<div style="color:#bbb;font-size:13px;padding:12px 0;">No items yet.</div>'
+        : items.map((r,i)=>`
+        <div style="background:#fafaf8;border:1px solid #e8e4de;border-radius:12px;padding:14px 16px;margin-bottom:10px;${r.paid?'opacity:0.55;':''}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:14px;font-weight:500;color:#222;${r.paid?'text-decoration:line-through;':''}">${r.desc}</div>
+              <div style="font-size:13px;color:#8a4f1a;font-weight:600;margin-top:2px;">$${(parseFloat(r.amount)||0).toFixed(2)}</div>
+              ${r.date?`<div style="font-size:11px;color:#aaa;margin-top:2px;">${r.date}</div>`:''}
+              ${r.notes?`<div style="font-size:12px;color:#888;margin-top:4px;font-style:italic;">${r.notes}</div>`:''}
+              ${r.receipt?`<a href="${r.receipt}" target="_blank" style="font-size:11px;color:#1a5f8a;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:5px;">↗ view receipt</a>`:''}
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+              <button onclick="toggleReimbPaid(${i})" style="font-size:11px;font-family:var(--font-body);padding:4px 12px;border-radius:12px;border:1px solid ${r.paid?'#b8d9b0':'#d0ccc6'};background:${r.paid?'#eaf3de':'#fff'};color:${r.paid?'#2e6b26':'#888'};cursor:pointer;white-space:nowrap;">
+                ${r.paid?'✓ Paid':'Mark paid'}
+              </button>
+              <button class="comp-del" style="margin:0;" onclick="deleteReimb(${i})">Remove</button>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+function toggleReimbForm(){ document.getElementById('reimbForm').classList.toggle('open'); }
+function saveReimb(){
+  const desc=document.getElementById('rf-desc').value.trim();
+  if(!desc) return;
+  if(!L().reimbursements) L().reimbursements=[];
+  L().reimbursements.push({
+    desc, amount:document.getElementById('rf-amount').value.trim(),
+    date:document.getElementById('rf-date').value.trim(),
+    receipt:document.getElementById('rf-receipt').value.trim(),
+    notes:document.getElementById('rf-notes').value.trim(),
+    paid:false
+  });
+  scheduleSave();
+  document.getElementById('panelBody').innerHTML=renderReimbursements();
+}
+function toggleReimbPaid(i){
+  L().reimbursements[i].paid=!L().reimbursements[i].paid;
+  scheduleSave();
+  document.getElementById('panelBody').innerHTML=renderReimbursements();
+}
+function deleteReimb(i){ if(!confirm('Remove this item?')) return; L().reimbursements.splice(i,1); scheduleSave(); document.getElementById('panelBody').innerHTML=renderReimbursements(); }
 
 // ─── BLANK DOCS ───────────────────────────────────────────────────────────────
 function renderBlank(key,placeholder){
