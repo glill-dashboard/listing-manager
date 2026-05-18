@@ -659,6 +659,7 @@ async function loadFromSheet(){
         l.activity=p.activity||[]; l.comps=p.comps||[];
         l.notes=p.notes||{}; l.docs=p.docs||{};
         l.reimbursements=p.reimbursements||[];
+        l.receiptsFolder=p.receiptsFolder||'';
       }catch(e){} }
     });
     setSyncStatus('saved','loaded');
@@ -676,7 +677,8 @@ function scheduleSave(){
       customPhases:l.customPhases, userEdited:!!l.customPhases,
       activity:l.activity||[], comps:l.comps||[],
       notes:l.notes||{}, docs:l.docs||{},
-      reimbursements:l.reimbursements||[]
+      reimbursements:l.reimbursements||[],
+      receiptsFolder:l.receiptsFolder||''
     }));
   },800);
 }
@@ -1168,9 +1170,28 @@ function saveNote(section,value){ if(!L().notes) L().notes={}; L().notes[section
 // ─── REIMBURSEMENTS ───────────────────────────────────────────────────────────
 function renderReimbursements(){
   const items=L().reimbursements||[];
+  const folderUrl=L().receiptsFolder||'';
   const total=items.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
   const unpaid=items.filter(r=>!r.paid).reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
   return `
+    <div style="background:#f7f6f3;border:1px solid #e0dbd4;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;">
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#aaa;white-space:nowrap;">Receipts folder</span>
+          ${folderUrl
+            ? `<a href="${folderUrl}" target="_blank" style="font-size:12px;color:#1a5f8a;font-weight:500;text-decoration:none;">↗ Open in Google Drive</a>`
+            : `<span style="font-size:12px;color:#ccc;font-style:italic;">No folder linked yet</span>`}
+        </div>
+        <button onclick="toggleFolderEdit()" style="font-size:11px;font-family:var(--font-body);padding:4px 12px;border-radius:12px;border:1px solid #ddd;background:#fff;color:#888;cursor:pointer;white-space:nowrap;">${folderUrl?'Edit link':'+ Link folder'}</button>
+      </div>
+      <div id="folderEditRow" style="display:none;margin-top:10px;">
+        <div style="display:flex;gap:8px;">
+          <input class="comp-field" id="folderUrlInput" style="flex:1;margin:0;" placeholder="Paste Google Drive folder URL…" value="${folderUrl.replace(/"/g,'&quot;')}" />
+          <button class="comp-submit" onclick="saveFolderUrl()">Save</button>
+          <button class="comp-cancel" onclick="toggleFolderEdit()">Cancel</button>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
       <div style="display:flex;gap:16px;">
         <div style="font-size:12px;color:#888;">Total: <strong style="color:#222;">$${total.toFixed(2)}</strong></div>
@@ -1183,7 +1204,6 @@ function renderReimbursements(){
         <input class="comp-field full" id="rf-desc" placeholder="Description (e.g. Painter deposit)" />
         <input class="comp-field" id="rf-amount" placeholder="Amount (e.g. 250.00)" type="number" step="0.01" />
         <input class="comp-field" id="rf-date" placeholder="Date" />
-        <input class="comp-field full" id="rf-receipt" placeholder="Receipt link (Google Drive URL, optional)" />
         <input class="comp-field full" id="rf-notes" placeholder="Notes (optional)" />
       </div>
       <div class="comp-form-btns">
@@ -1202,7 +1222,6 @@ function renderReimbursements(){
               <div style="font-size:13px;color:#8a4f1a;font-weight:600;margin-top:2px;">$${(parseFloat(r.amount)||0).toFixed(2)}</div>
               ${r.date?`<div style="font-size:11px;color:#aaa;margin-top:2px;">${r.date}</div>`:''}
               ${r.notes?`<div style="font-size:12px;color:#888;margin-top:4px;font-style:italic;">${r.notes}</div>`:''}
-              ${r.receipt?`<a href="${r.receipt}" target="_blank" style="font-size:11px;color:#1a5f8a;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:5px;">↗ view receipt</a>`:''}
             </div>
             <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
               <button onclick="toggleReimbPaid(${i})" style="font-size:11px;font-family:var(--font-body);padding:4px 12px;border-radius:12px;border:1px solid ${r.paid?'#b8d9b0':'#d0ccc6'};background:${r.paid?'#eaf3de':'#fff'};color:${r.paid?'#2e6b26':'#888'};cursor:pointer;white-space:nowrap;">
@@ -1214,6 +1233,16 @@ function renderReimbursements(){
         </div>`).join('')}
     </div>`;
 }
+function toggleFolderEdit(){
+  const row=document.getElementById('folderEditRow');
+  row.style.display=row.style.display==='none'?'block':'none';
+  if(row.style.display==='block') document.getElementById('folderUrlInput').focus();
+}
+function saveFolderUrl(){
+  L().receiptsFolder=document.getElementById('folderUrlInput').value.trim();
+  scheduleSave();
+  document.getElementById('panelBody').innerHTML=renderReimbursements();
+}
 function toggleReimbForm(){ document.getElementById('reimbForm').classList.toggle('open'); }
 function saveReimb(){
   const desc=document.getElementById('rf-desc').value.trim();
@@ -1222,7 +1251,6 @@ function saveReimb(){
   L().reimbursements.push({
     desc, amount:document.getElementById('rf-amount').value.trim(),
     date:document.getElementById('rf-date').value.trim(),
-    receipt:document.getElementById('rf-receipt').value.trim(),
     notes:document.getElementById('rf-notes').value.trim(),
     paid:false
   });
